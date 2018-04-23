@@ -15,13 +15,13 @@ writer = tf.summary.FileWriter(dir_path + "/tensorboard/" + ts)
 # writer = tf.summary.FileWriter("/tensorboard/" + ts)
 
 # conv filter (word)size and number of filters
-filter_size = 6
-filter_count = 8
+filter_size = 5
+filter_count = 7
 
 # learning rate
-learning_rate = 0.25
+learning_rate = 0.22
 # regularization rate
-reg_rate = 0.025
+reg_rate = 0.029
 # stops after this many iterations
 iteration_count = 10000
 
