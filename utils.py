@@ -4,6 +4,7 @@ import time, math, random, datetime
 import numpy as np
 import csv
 import re
+import nltk
 from nltk.corpus import stopwords
 from nltk.tokenize import sent_tokenize, word_tokenize, PunktSentenceTokenizer
 
@@ -17,9 +18,9 @@ w2v_limit_default = 80000
 
 # nltk.download()
 # download stopwords
-# nltk.download("stopwords")
+nltk.download("stopwords")
 # download tokenize
-# nltk.download('punkt')
+nltk.download('punkt')
 
 class Timestamp():
     def __init__(self):

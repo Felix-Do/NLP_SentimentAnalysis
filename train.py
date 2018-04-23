@@ -1,8 +1,6 @@
 import os, time, datetime, math, random
 import numpy as np
 import tensorflow as tf
-import nltk
-import gensim
 import utils
 
 
