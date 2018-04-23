@@ -16,12 +16,12 @@ writer = tf.summary.FileWriter(dir_path + "/tensorboard/" + ts)
 
 # conv filter (word)size and number of filters
 filter_size = 5
-filter_count = 7
+filter_count = 9
 
 # learning rate
-learning_rate = 0.22
+learning_rate = 0.28
 # regularization rate
-reg_rate = 0.029
+reg_rate = 0.018
 # stops after this many iterations
 iteration_count = 10000
 
@@ -66,8 +66,8 @@ def tf_run():
     l2_norm_0 = tf.nn.l2_loss(w0, name="l2_norm_0")
     l2_norm_1 = tf.nn.l2_loss(w1, name="l2_norm_1")
     loss_base = tf.reduce_mean(tf.squared_difference(y, pred))
-    # loss = loss_base
-    loss = loss_base + l2_norm_0 * reg_rate
+    loss = loss_base
+    # loss = loss_base + l2_norm_0 * reg_rate
     # loss = loss_base + l2_norm_1 * reg_rate
     # loss = loss_base + l2_norm_0 * reg_rate + l2_norm_1 * reg_rate
     # optimizer = tf.train.AdamOptimizer(learning_rate).minimize(loss)

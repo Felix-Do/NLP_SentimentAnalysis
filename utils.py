@@ -9,18 +9,15 @@ from nltk.corpus import stopwords
 from nltk.tokenize import sent_tokenize, word_tokenize, PunktSentenceTokenizer
 
 
+w2v_limit_default = 80000
 w2v_filepath_default = "GoogleNews-vectors-negative300.bin"
 data_filepath_default = "tweets_clean.csv"
-w2v_limit_default = 80000
 # data_filepath_default = "tweets_clean_short.csv"
-# sent_exam = "Hello Mr. Smith, how are you doing #today? The weather is #great and Python is awesome. The sky is really blue as well"
-# model = KeyedVectors.load_word2vec_format("GoogleNews-vectors-negative300.bin", limit=100000, binary=True)
 
+# the lines below are for first time running, to download the needed library, comment them out after
 # nltk.download()
-# download stopwords
-nltk.download("stopwords")
-# download tokenize
-nltk.download('punkt')
+nltk.download("stopwords")  # download stopwords
+nltk.download('punkt')      # download tokenize
 
 class Timestamp():
     def __init__(self):
@@ -39,19 +36,13 @@ class Timestamp():
         return stamp
 
     def format(self, value=0, digit=2):
-        op = ""
-        missing_digit_count = int(round(digit) - 1)
-        if value > 0:
-            missing_digit_count = int(round(round(digit) - np.floor(np.log10(value)) - 1))
-        for i in range(missing_digit_count):
-            op = op + "0"
-        op = op + str(value)
-        return op
+        return format(value, "0" + str(digit) + "d")
 
 
 class Data():
     def __init__(self, fixed_word_count_=24, w2v_filepath_=w2v_filepath_default, w2v_limit_=w2v_limit_default):
         self.max_word_count = 0
+        self.shuffle_all_data = True
         self.fixed_word_count = fixed_word_count_
         self.stop_words = set(stopwords.words("english"))
         self.tweet_stopwords = ["#", ",", "."]
@@ -61,7 +52,11 @@ class Data():
         return None
     
     def text2words(self, text_input=""):
-        text = re.sub(r'[^\w\s]', ' ', text_input.replace('_', ' '))
+        text_cleansed = text_input
+        text_cleansed = text_cleansed.replace('_', ' ')
+        text_cleansed = text_cleansed.replace('-', ' ')
+        text_cleansed = text_cleansed.replace('.', ' ')
+        text = re.sub(r'[^\w\s]', ' ', text_cleansed)
         words = word_tokenize(text)
         words = np.array([w for w in words if not w in self.tweet_stopwords])
         return words
@@ -72,28 +67,17 @@ class Data():
         return words_filtered
 
     def words2matrix(self, words=[]):
-        # word_count = len(words)
         matrix = np.zeros([self.fixed_word_count, self.w2v_dim])
-        word_index = 0
-        if self.max_word_count < len(words):
-            if len(words) >= 100 and self.max_word_count < 100:
-                print(words)
-            self.max_word_count = len(words)
-        # word_filter_w2v = []
-        # for w in words:
-        #     if w in self.model.wv:
+        word_index = -1
         for w in words:
             if w in self.model.wv:
-                # if word_index >= self.fixed_word_count:
-                #     continue
-                # print("YES:", w)
+                word_index += 1
+                if self.max_word_count < word_index + 1:
+                    self.max_word_count = word_index + 1
+                if word_index >= self.fixed_word_count:
+                    continue
                 word_vec = np.array(self.model.wv[w])
                 matrix[word_index] = word_vec
-                word_index += 1
-                # if self.max_word_count < word_index:
-                #     self.max_word_count = word_index
-                if word_index >= self.fixed_word_count:
-                    break
         matrix = np.transpose(matrix)
         return matrix
 
@@ -127,48 +111,28 @@ class Data():
                 self.w2v_dim = len(self.model.wv[cw])
                 break
         return 1
-
-    def load_tweet_dataset(self, filepath=data_filepath_default):
+    
+    def prepare_data(self, filepath=data_filepath_default):
         dataset_read = []
-        
         with open(filepath, encoding="ISO-8859-1") as f:
-            reader = csv.reader(f)
-            data = reader
-            with open(filepath, encoding="ISO-8859-1") as f:
-                reader = csv.reader(f)
-                data = reader
-                for line in data:
-                    # print(line)
-                    line_total = ""
-                    for line_piece in line:
-                        line_total = line_total + str(line_piece)
-                    if len(line_total) <= 2: continue
-                    data_output = int(line_total[0])
-                    data_input = line_total[2 : None]
-                    dataset_read.append([data_input, data_output])
-            # data = [(int(col0), col1)
-            #             for col0, col1 in reader]
-            # for line in data:
-            #     if len(line) <= 0: continue
-            #     line_txt = ""
-            #     for j in range(len(line)):
-            #         line_txt = line_txt + line[j]
-            #     if len(line[0]) <= 2: continue
-            #     data_output = int(line[0][0])
-            #     data_input = line[0][2 : None]
-            #     for i in range(2):
-            #         if (tweet[0] == i):
-            #             data_input = tweet[1]
-            #             data_output = [0, 0]
-            #             data_output[i] = 1
-            #             dataset_read.append([data_input, i])
+            data = csv.reader(f)
+            for line in data:
+                # print(line)
+                line_total = ""
+                for line_piece in line:
+                    line_total = line_total + str(line_piece)
+                if len(line_total) <= 2: continue
+                data_output = int(line_total[0])
+                data_input = line_total[2 : None]
+                dataset_read.append([data_input, data_output])
         
         # shuffle data?
-        # np.random.shuffle(dataset_read)
+        if self.shuffle_all_data:
+            print("shuffling all data before splitting")
+            np.random.shuffle(dataset_read)
 
         # section data
         mult = 1000
-        # mult = 1
         total_len = len(dataset_read)
         print("total length of dataset:", total_len)
         test_len = 2000
@@ -179,21 +143,15 @@ class Data():
         count_break[1] = train_len
         count_break[2] = train_len + val_len
         count_break[3] = train_len + val_len + test_len
-        self.data_grouped = [[]] * 3
-        for j in range(3):
-            self.data_grouped[j] = dataset_read[count_break[j] : count_break[j+1]]
-            # print(j, count_break[j], count_break[j+1], len(data[j]))
-        # print(data)
-        return self.data_grouped
-    
-    def prepare_data(self):
-        self.data_grouped = self.load_tweet_dataset()
-        self.group = [[None] * 3] * 2
         self.data_index = [0] * 3
 
-        self.data_train_in, self.data_train_out, self.data_train_len = self.split_grouped_data(self.data_grouped[0])
-        self.data_val_in,   self.data_val_out,   self.data_val_len   = self.split_grouped_data(self.data_grouped[1])
-        self.data_test_in,  self.data_test_out,  self.data_test_len  = self.split_grouped_data(self.data_grouped[2])
+        self.data_train_in, self.data_train_out, self.data_train_len = self.split_grouped_data(dataset_read[count_break[0] : count_break[1]])
+        self.data_val_in,   self.data_val_out,   self.data_val_len   = self.split_grouped_data(dataset_read[count_break[1] : count_break[2]])
+        self.data_test_in,  self.data_test_out,  self.data_test_len  = self.split_grouped_data(dataset_read[count_break[2] : count_break[3]])
+        
+        print("data splitted:  train=" + str(self.data_train_len) + "  val=" + str(self.data_val_len) + "  test=" + str(self.data_test_len) )
+        print("max word count: ", self.max_word_count)
+        return 1
     
     def split_grouped_data(self, data_group=[]):
         np.random.shuffle(data_group)
