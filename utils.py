@@ -9,13 +9,14 @@ from nltk.corpus import stopwords
 from nltk.tokenize import sent_tokenize, word_tokenize, PunktSentenceTokenizer
 
 
-w2v_limit_default = 80000
+w2v_limit_default = 150000
 w2v_filepath_default = "GoogleNews-vectors-negative300.bin"
+fixed_word_count_default = 16
 data_filepath_default = "tweets_clean.csv"
 # data_filepath_default = "tweets_clean_short.csv"
 
 # the lines below are for first time running, to download the needed library, comment them out after
-# nltk.download()
+# nltk.download()             # download_manager
 nltk.download("stopwords")  # download stopwords
 nltk.download('punkt')      # download tokenize
 
@@ -40,9 +41,9 @@ class Timestamp():
 
 
 class Data():
-    def __init__(self, fixed_word_count_=24, w2v_filepath_=w2v_filepath_default, w2v_limit_=w2v_limit_default):
+    def __init__(self, fixed_word_count_=fixed_word_count_default, w2v_filepath_=w2v_filepath_default, w2v_limit_=w2v_limit_default):
         self.max_word_count = 0
-        self.shuffle_all_data = True
+        self.shuffle_all_data = False
         self.fixed_word_count = fixed_word_count_
         self.stop_words = set(stopwords.words("english"))
         self.tweet_stopwords = ["#", ",", "."]
@@ -79,7 +80,10 @@ class Data():
                 word_vec = np.array(self.model.wv[w])
                 matrix[word_index] = word_vec
         matrix = np.transpose(matrix)
-        return matrix
+        is_empty = False
+        if word_index < 0:
+            is_empty = True
+        return matrix, is_empty
 
     def text2matrix(self, text_input="", filtering=True):
         words = np.array([])
@@ -87,8 +91,8 @@ class Data():
             words = self.text2words_filter(text_input)
         else:
             words = self.text2words(text_input)
-        matrix = self.words2matrix(words)
-        return matrix
+        matrix, is_empty = self.words2matrix(words)
+        return matrix, is_empty
 
     def sentiment_int2vec(self, sent_int=0):
         if sent_int == 1:
@@ -115,9 +119,9 @@ class Data():
     def prepare_data(self, filepath=data_filepath_default):
         dataset_read = []
         with open(filepath, encoding="ISO-8859-1") as f:
-            data = csv.reader(f)
+            reader = csv.reader(f)
+            data = reader
             for line in data:
-                # print(line)
                 line_total = ""
                 for line_piece in line:
                     line_total = line_total + str(line_piece)
@@ -132,35 +136,38 @@ class Data():
             np.random.shuffle(dataset_read)
 
         # section data
-        mult = 1000
         total_len = len(dataset_read)
         print("total length of dataset:", total_len)
-        test_len = 2000
+        test_len = 1000
         val_len = 2000
-        train_len = math.floor((total_len - test_len - val_len) / mult) * mult
-        count_break = [None] * 4
-        count_break[0] = 0
-        count_break[1] = train_len
-        count_break[2] = train_len + val_len
-        count_break[3] = train_len + val_len + test_len
+        
         self.data_index = [0] * 3
 
-        self.data_train_in, self.data_train_out, self.data_train_len = self.split_grouped_data(dataset_read[count_break[0] : count_break[1]])
-        self.data_val_in,   self.data_val_out,   self.data_val_len   = self.split_grouped_data(dataset_read[count_break[1] : count_break[2]])
-        self.data_test_in,  self.data_test_out,  self.data_test_len  = self.split_grouped_data(dataset_read[count_break[2] : count_break[3]])
-        
+        self.data_train_in, self.data_train_out, self.data_train_len = self.convert_split_data(dataset_read[test_len + val_len  : None], True)
+        self.data_val_in,   self.data_val_out,   self.data_val_len   = self.convert_split_data(dataset_read[test_len            : test_len + val_len])
+        self.data_test_in,  self.data_test_out,  self.data_test_len  = self.convert_split_data(dataset_read[0                   : test_len])
+
         print("data splitted:  train=" + str(self.data_train_len) + "  val=" + str(self.data_val_len) + "  test=" + str(self.data_test_len) )
         print("max word count: ", self.max_word_count)
         return 1
     
-    def split_grouped_data(self, data_group=[]):
+    def convert_split_data(self, data_group=[], exclude_empty=False):
+        mult = 1000
         np.random.shuffle(data_group)
-        data_len = len(data_group)
-        data_in  = np.zeros([data_len, self.w2v_dim, self.fixed_word_count])
-        data_out = np.zeros([data_len, 2])
-        for i in range(data_len):
-            data_in[i]  = self.text2matrix(data_group[i][0])
-            data_out[i] = self.sentiment_int2vec(data_group[i][1])
+        data_raw_len = len(data_group)
+        data_in  = np.zeros([data_raw_len, self.w2v_dim, self.fixed_word_count])
+        data_out = np.zeros([data_raw_len, 2])
+        data_index = 0
+        for i in range(data_raw_len):
+            text_matrix, is_empty = self.text2matrix(data_group[i][0])
+            if is_empty and exclude_empty: continue
+            label_vec = self.sentiment_int2vec(data_group[i][1])
+            data_in[data_index] = text_matrix
+            data_out[data_index] = label_vec
+            data_index += 1
+        data_len = math.floor(data_index / mult) * mult
+        data_in  = np.delete(data_in , slice(data_len, None), axis=0)
+        data_out = np.delete(data_out, slice(data_len, None), axis=0)
         return data_in, data_out, data_len
     
     def next_batch(self, group=0, batch_size=100, specific_start_index=-1):
@@ -191,19 +198,5 @@ class Data():
         if not (specific_start_index in range(length)):
             self.data_index[group] = end_index
         return batch_in, batch_out
-
-
-# [TESTING]
-
-# data = Data()
-# timestamp = Timestamp()
-# print(data.data_train_len, data.data_val_len, data.data_test_len)
-# print("max word count: ", data.max_word_count)
-# test_batch_in, test_batch_out = data.next_batch(0, 200)
-# print("\nbatch test:")
-# print(np.shape(test_batch_in))
-# print(test_batch_in[0])
-# print(test_batch_in[1])
-# print(test_batch_in)
 
 
